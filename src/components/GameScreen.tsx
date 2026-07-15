@@ -94,9 +94,26 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
   };
 
   const handleSkip = () => {
+    // Record the skipped word result
     setResults((prev) => [...prev, { word: currentWord, result: "skip" }]);
-    timer.pause();
-    advanceToNext();
+    
+    // Move immediately to the next word
+    const nextIndex = currentIndex + 1;
+    if (nextIndex >= words.length) {
+      setPhase("finished");
+      timer.pause();
+    } else {
+      setCurrentIndex(nextIndex);
+      setPhase("playing");
+      
+      // If we are in 'reset' mode, start a fresh timer for the new word
+      if (timerMode === "reset") {
+        timer.reset(timerSeconds);
+        timer.start();
+      }
+      // Note: In 'continuous' mode, we do NOT call timer.reset() or timer.pause().
+      // The timer keeps running seamlessly in the background!
+    }
   };
 
   const advanceToNext = useCallback(() => {
@@ -398,7 +415,6 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
       </div>
 
       {/* ── WORD AREA ── */}
-      {/* flex-[3] and min-h-[50vh] give the word the absolute maximum portion of the canvas */}
       <div className="relative z-10 flex-[3] flex flex-col items-center justify-center px-4 sm:px-8 w-full min-h-[50vh] overflow-hidden">
         <div className="w-full h-full flex items-center justify-center min-h-0">
           <FitText
