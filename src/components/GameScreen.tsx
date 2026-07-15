@@ -317,13 +317,26 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     return (
       <div className="fixed inset-0 bg-[#060609] z-50 flex items-center justify-center p-4 overflow-y-auto">
         <div className="max-w-md w-full space-y-6 py-8">
-          <div className="text-center space-y-3">
-            <TrophyIcon className="w-12 h-12 mx-auto text-cyan-400" />
+          <div className="text-center space-y-4">
+            <TrophyIcon className="w-12 h-12 mx-auto text-cyan-400 animate-bounce" />
             <h2 className="text-2xl font-bold text-white uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>
               GAME OVER
             </h2>
-            <div className="text-gray-400 text-xs font-mono tracking-wider">
-              TIME SPENT: <span className="text-cyan-400 font-bold">{timeSpentDisplay.min}:{timeSpentDisplay.sec}</span> / {timeLimitDisplay.min}:{timeLimitDisplay.sec}
+            
+            {/* ── GIANT TIME SPENT HEADER CARD ── */}
+            <div className="bg-gradient-to-b from-cyan-950/20 to-cyan-950/5 border border-cyan-500/20 rounded-2xl py-6 px-4 shadow-[0_0_30px_rgba(6,182,212,0.05),inset_0_0_15px_rgba(6,182,212,0.05)]">
+              <span className="text-xs text-cyan-400 font-bold font-mono tracking-[0.2em] uppercase block mb-2">
+                ⏱️ TIME SPENT GUESSING
+              </span>
+              <div className="flex items-baseline justify-center gap-2" style={{ fontFamily: "'Orbitron', monospace" }}>
+                <span className="text-5xl sm:text-6xl font-black text-cyan-300 drop-shadow-[0_0_15px_rgba(34,211,238,0.45)] tracking-wide tabular-nums">
+                  {timeSpentDisplay.min}:{timeSpentDisplay.sec}
+                </span>
+                <span className="text-gray-600 text-2xl font-bold">/</span>
+                <span className="text-gray-500 text-xl font-semibold tabular-nums">
+                  {timeLimitDisplay.min}:{timeLimitDisplay.sec}
+                </span>
+              </div>
             </div>
           </div>
 
