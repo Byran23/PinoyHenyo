@@ -317,26 +317,13 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     return (
       <div className="fixed inset-0 bg-[#060609] z-50 flex items-center justify-center p-4 overflow-y-auto">
         <div className="max-w-md w-full space-y-6 py-8">
-          <div className="text-center space-y-4">
+          <div className="text-center space-y-3">
             <TrophyIcon className="w-12 h-12 mx-auto text-cyan-400" />
-            <h2 className="text-2xl font-bold text-white uppercase tracking-wider animate-pulse" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+            <h2 className="text-2xl font-bold text-white uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>
               GAME OVER
             </h2>
-            
-            {/* ── MASSIVE NEON TIME SPENT DISPLAY ── */}
-            <div className="bg-cyan-500/[0.04] border border-cyan-500/25 rounded-2xl py-6 px-4 shadow-[0_0_30px_rgba(6,182,212,0.1),inset_0_0_20px_rgba(6,182,212,0.05)]">
-              <span className="text-[11px] text-cyan-400/80 font-bold font-mono tracking-[0.3em] uppercase block mb-2">
-                Time Spent Guessing
-              </span>
-              <div className="flex items-baseline justify-center gap-2" style={{ fontFamily: "'Orbitron', monospace" }}>
-                <span className="text-6xl sm:text-7xl font-black text-cyan-400 drop-shadow-[0_0_15px_rgba(34,211,238,0.4)] tracking-wide tabular-nums leading-none">
-                  {timeSpentDisplay.min}:{timeSpentDisplay.sec}
-                </span>
-                <span className="text-gray-700 text-2xl sm:text-3xl font-bold px-1 select-none">/</span>
-                <span className="text-gray-500 text-2xl sm:text-3xl font-semibold tracking-wide tabular-nums">
-                  {timeLimitDisplay.min}:{timeLimitDisplay.sec}
-                </span>
-              </div>
+            <div className="text-gray-400 text-xs font-mono tracking-wider">
+              TIME SPENT: <span className="text-cyan-400 font-bold">{timeSpentDisplay.min}:{timeSpentDisplay.sec}</span> / {timeLimitDisplay.min}:{timeLimitDisplay.sec}
             </div>
           </div>
 
