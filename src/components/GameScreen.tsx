@@ -398,11 +398,11 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
       </div>
 
       {/* ── WORD AREA ── */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 sm:px-8 overflow-hidden">
-        <div className="w-full">
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 sm:px-12 w-full min-h-0 overflow-hidden">
+        <div className="w-full max-w-4xl mx-auto flex items-center justify-center min-h-0">
           <FitText
             text={currentWord}
-            className="font-black text-white uppercase text-center tracking-wider"
+            className="font-black text-white uppercase text-center tracking-wider whitespace-nowrap"
             maxFontSize={400}
             minFontSize={32}
           />
