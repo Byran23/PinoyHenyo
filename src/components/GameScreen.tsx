@@ -17,8 +17,8 @@ interface GameScreenProps {
   onExit: () => void;
 }
 
-interface WordState {
-  originalIndex: number;
+interface PlayableWord {
+  id: number;
   word: string;
 }
 
@@ -28,12 +28,12 @@ interface WordResult {
 }
 
 export default function GameScreen({ words, timerSeconds, timerMode, onExit }: GameScreenProps) {
-  // We keep an active queue of words to play. Skipped words will be appended back to the end.
-  const [activeWords, setActiveWords] = useState<WordState[]>([]);
+  // Pool of words that have NOT yet been answered correctly
+  const [pool, setPool] = useState<PlayableWord[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [phase, setPhase] = useState<GamePhase>("ready");
   
-  // Track final word statuses indexed by original word order
+  // Track final statuses indexed by their original index in the 'words' array
   const [resultsMap, setResultsMap] = useState<Record<number, "correct" | "timeout" | "skip">>({});
   const [countdownNum, setCountdownNum] = useState(3);
   
@@ -41,49 +41,48 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const timerStartedRef = useRef(false);
 
-  // Initialize the word list queue on mount or restart
+  // Initialize pool on mount
   useEffect(() => {
-    setActiveWords(words.map((word, idx) => ({ originalIndex: idx, word })));
+    setPool(words.map((word, id) => ({ id, word })));
   }, [words]);
 
-  const currentWordObj = currentIndex < activeWords.length ? activeWords[currentIndex] : null;
+  const currentWordObj = currentIndex < pool.length ? pool[currentIndex] : null;
   const currentWord = currentWordObj ? currentWordObj.word : "";
 
   const handleTimeout = useCallback(() => {
     setPhase("timeout");
-    
-    // In continuous mode, the game ends when time runs out
     if (timerMode === "continuous") {
+      timer.pause();
+      // Mark all remaining un-guessed words in the active pool as timed out
       setResultsMap((prev) => {
         const updated = { ...prev };
-        // Mark all remaining un-guessed words in the queue as timed out
-        activeWords.slice(currentIndex).forEach((w) => {
-          if (updated[w.originalIndex] !== "correct") {
-            updated[w.originalIndex] = "timeout";
+        pool.forEach((w) => {
+          if (updated[w.id] !== "correct") {
+            updated[w.id] = "timeout";
           }
         });
         return updated;
       });
     } else {
-      // Per-word reset mode: just mark the current single word as timed out
+      // Reset mode: mark only the current active word as timed out
       if (currentWordObj) {
         setResultsMap((prev) => ({
           ...prev,
-          [currentWordObj.originalIndex]: "timeout"
+          [currentWordObj.id]: "timeout"
         }));
       }
     }
-  }, [timerMode, activeWords, currentIndex, currentWordObj]);
+  }, [timerMode, pool, currentWordObj, timer]);
 
   const timer = useTimer({
     initialSeconds: timerSeconds,
     onTimeout: handleTimeout,
   });
 
-  // Calculate elapsed time spent guessing
+  // Calculate duration elapsed
   const timeSpentSeconds = timerSeconds - timer.secondsLeft;
 
-  // Wake lock
+  // Wake lock management
   useEffect(() => {
     const requestWakeLock = async () => {
       try {
@@ -101,7 +100,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     enterFullscreen();
   }, [enterFullscreen]);
 
-  // Ready countdown
+  // Ready countdown logic
   useEffect(() => {
     if (phase !== "ready") return;
     if (countdownNum < 0) {
@@ -118,13 +117,16 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, countdownNum]);
 
+  // Remove correctly guessed / timed out word from active pool & advance
   const advanceToNext = useCallback(() => {
-    const nextIndex = currentIndex + 1;
-    if (nextIndex >= activeWords.length) {
+    const newPool = pool.filter((_, idx) => idx !== currentIndex);
+    
+    if (newPool.length === 0) {
       setPhase("finished");
       timer.pause();
     } else {
-      setCurrentIndex(nextIndex);
+      setPool(newPool);
+      setCurrentIndex(currentIndex % newPool.length);
       setPhase("playing");
       if (timerMode === "reset") {
         timer.reset(timerSeconds);
@@ -133,7 +135,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
         timer.start();
       }
     }
-  }, [currentIndex, activeWords.length, timer, timerSeconds, timerMode]);
+  }, [pool, currentIndex, timer, timerMode, timerSeconds]);
 
   const handleCorrect = useCallback(() => {
     if (phase !== "playing" || !currentWordObj) return;
@@ -141,7 +143,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     setPhase("correct");
     setResultsMap((prev) => ({
       ...prev,
-      [currentWordObj.originalIndex]: "correct"
+      [currentWordObj.id]: "correct"
     }));
     timer.pause();
   }, [phase, currentWordObj, timer]);
@@ -149,35 +151,29 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
   const handleSkip = useCallback(() => {
     if (phase !== "playing" || !currentWordObj) return;
 
-    // Record it as skipped for now
+    // Record it as skipped
     setResultsMap((prev) => ({
       ...prev,
-      [currentWordObj.originalIndex]: prev[currentWordObj.originalIndex] === "correct" 
-        ? "correct" 
-        : "skip"
+      [currentWordObj.id]: prev[currentWordObj.id] === "correct" ? "correct" : "skip"
     }));
 
     if (timerMode === "continuous") {
-      // Append the skipped word back to the end of the active queue to go over it again
-      setActiveWords((prev) => [...prev, currentWordObj]);
-      
-      // Keep moving forward down the list. The skipped word will cycle back.
-      setCurrentIndex((prev) => prev + 1);
+      // Loop: cycle to the next word in the pool
+      setCurrentIndex((prev) => (prev + 1) % pool.length);
     } else {
-      // In reset mode, skip moves directly to the next word
-      const nextIndex = currentIndex + 1;
-      if (nextIndex >= activeWords.length) {
+      // Reset mode: remove from active pool
+      const newPool = pool.filter((_, idx) => idx !== currentIndex);
+      if (newPool.length === 0) {
         setPhase("finished");
         timer.pause();
       } else {
-        setCurrentIndex(nextIndex);
-        if (timerMode === "reset") {
-          timer.reset(timerSeconds);
-          timer.start();
-        }
+        setPool(newPool);
+        setCurrentIndex(currentIndex % newPool.length);
+        timer.reset(timerSeconds);
+        timer.start();
       }
     }
-  }, [phase, currentWordObj, timerMode, currentIndex, activeWords.length, timer, timerSeconds]);
+  }, [phase, currentWordObj, timerMode, currentIndex, pool, timer, timerSeconds]);
 
   const handleExit = useCallback(() => {
     exitFullscreen();
@@ -186,7 +182,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
   }, [exitFullscreen, timer, onExit]);
 
   const handlePlayAgain = () => {
-    setActiveWords(words.map((word, idx) => ({ originalIndex: idx, word })));
+    setPool(words.map((word, id) => ({ id, word })));
     setCurrentIndex(0);
     setResultsMap({});
     setCountdownNum(3);
@@ -195,7 +191,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     timer.reset(timerSeconds);
   };
 
-  // Keyboard controls listener
+  // Keyboard shortcut listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (phase === "playing") {
@@ -227,13 +223,13 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [phase, handleCorrect, handleSkip, advanceToNext, handleExit, timerMode]);
 
-  // Transform internal results map to sequential display items
+  // Construct sequential final results for the stats screen
   const finalResults: WordResult[] = words.map((word, idx) => ({
     word,
     result: resultsMap[idx] || "skip",
   }));
 
-  // Timer visual
+  // Timer visualization formulas
   const pct = timerSeconds > 0 ? timer.secondsLeft / timerSeconds : 0;
 
   const getBarColor = () => {
@@ -326,8 +322,6 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
             <h2 className="text-2xl font-bold text-white uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>
               GAME OVER
             </h2>
-            
-            {/* Display the spent guessing duration */}
             <div className="text-gray-400 text-xs font-mono tracking-wider">
               TIME SPENT: <span className="text-cyan-400 font-bold">{timeSpentDisplay.min}:{timeSpentDisplay.sec}</span> / {timeLimitDisplay.min}:{timeLimitDisplay.sec}
             </div>
@@ -429,7 +423,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
               }}
               className="mt-4 px-8 py-3 rounded-lg bg-white/10 border border-white/[0.1] text-white font-semibold text-sm hover:bg-white/20 transition-all flex items-center gap-2 mx-auto"
             >
-              {timerMode === "continuous" || currentIndex + 1 >= activeWords.length ? (
+              {timerMode === "continuous" || currentIndex + 1 >= pool.length ? (
                 <>See Results (Enter)</>
               ) : (
                 <>
@@ -475,7 +469,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
               onClick={advanceToNext}
               className="mt-4 px-8 py-3 rounded-lg bg-white/10 border border-white/[0.1] text-white font-semibold text-sm hover:bg-white/20 transition-all flex items-center gap-2 mx-auto"
             >
-              {currentIndex + 1 < activeWords.length ? (
+              {currentIndex + 1 < pool.length ? (
                 <>
                   Next Word (Enter)
                   <ArrowRightIcon className="w-4 h-4" />
@@ -498,9 +492,9 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
         </button>
         <div className="flex items-center gap-3">
           <span className="text-[11px] text-gray-600 font-mono tabular-nums tracking-wider">
-            {Math.min(currentIndex + 1, activeWords.length)}
+            {Math.min(currentIndex + 1, pool.length)}
             <span className="text-gray-800"> / </span>
-            {activeWords.length}
+            {pool.length}
           </span>
         </div>
         <div className="w-8" />
