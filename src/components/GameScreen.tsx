@@ -17,8 +17,8 @@ interface GameScreenProps {
   onExit: () => void;
 }
 
-interface PlayableWord {
-  id: number;
+interface WordState {
+  originalIndex: number;
   word: string;
 }
 
@@ -28,12 +28,12 @@ interface WordResult {
 }
 
 export default function GameScreen({ words, timerSeconds, timerMode, onExit }: GameScreenProps) {
-  // Pool of words that have NOT yet been answered correctly
-  const [pool, setPool] = useState<PlayableWord[]>([]);
+  // We keep an active queue of words to play. Skipped words will be appended back to the end.
+  const [activeWords, setActiveWords] = useState<WordState[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [phase, setPhase] = useState<GamePhase>("ready");
   
-  // Track final statuses indexed by their original index in the 'words' array
+  // Track final word statuses indexed by original word order
   const [resultsMap, setResultsMap] = useState<Record<number, "correct" | "timeout" | "skip">>({});
   const [countdownNum, setCountdownNum] = useState(3);
   
@@ -41,48 +41,49 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const timerStartedRef = useRef(false);
 
-  // Initialize pool on mount
+  // Initialize the word list queue on mount or restart
   useEffect(() => {
-    setPool(words.map((word, id) => ({ id, word })));
+    setActiveWords(words.map((word, idx) => ({ originalIndex: idx, word })));
   }, [words]);
 
-  const currentWordObj = currentIndex < pool.length ? pool[currentIndex] : null;
+  const currentWordObj = currentIndex < activeWords.length ? activeWords[currentIndex] : null;
   const currentWord = currentWordObj ? currentWordObj.word : "";
 
   const handleTimeout = useCallback(() => {
     setPhase("timeout");
+    
+    // In continuous mode, the game ends when time runs out
     if (timerMode === "continuous") {
-      timer.pause();
-      // Mark all remaining un-guessed words in the active pool as timed out
       setResultsMap((prev) => {
         const updated = { ...prev };
-        pool.forEach((w) => {
-          if (updated[w.id] !== "correct") {
-            updated[w.id] = "timeout";
+        // Mark all remaining un-guessed words in the queue as timed out
+        activeWords.slice(currentIndex).forEach((w) => {
+          if (updated[w.originalIndex] !== "correct") {
+            updated[w.originalIndex] = "timeout";
           }
         });
         return updated;
       });
     } else {
-      // Reset mode: mark only the current active word as timed out
+      // Per-word reset mode: just mark the current single word as timed out
       if (currentWordObj) {
         setResultsMap((prev) => ({
           ...prev,
-          [currentWordObj.id]: "timeout"
+          [currentWordObj.originalIndex]: "timeout"
         }));
       }
     }
-  }, [timerMode, pool, currentWordObj, timer]);
+  }, [timerMode, activeWords, currentIndex, currentWordObj]);
 
   const timer = useTimer({
     initialSeconds: timerSeconds,
     onTimeout: handleTimeout,
   });
 
-  // Calculate duration elapsed
+  // Calculate elapsed time spent guessing
   const timeSpentSeconds = timerSeconds - timer.secondsLeft;
 
-  // Wake lock management
+  // Wake lock
   useEffect(() => {
     const requestWakeLock = async () => {
       try {
@@ -100,7 +101,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     enterFullscreen();
   }, [enterFullscreen]);
 
-  // Ready countdown logic
+  // Ready countdown
   useEffect(() => {
     if (phase !== "ready") return;
     if (countdownNum < 0) {
@@ -117,16 +118,13 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, countdownNum]);
 
-  // Remove correctly guessed / timed out word from active pool & advance
   const advanceToNext = useCallback(() => {
-    const newPool = pool.filter((_, idx) => idx !== currentIndex);
-    
-    if (newPool.length === 0) {
+    const nextIndex = currentIndex + 1;
+    if (nextIndex >= activeWords.length) {
       setPhase("finished");
       timer.pause();
     } else {
-      setPool(newPool);
-      setCurrentIndex(currentIndex % newPool.length);
+      setCurrentIndex(nextIndex);
       setPhase("playing");
       if (timerMode === "reset") {
         timer.reset(timerSeconds);
@@ -135,7 +133,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
         timer.start();
       }
     }
-  }, [pool, currentIndex, timer, timerMode, timerSeconds]);
+  }, [currentIndex, activeWords.length, timer, timerSeconds, timerMode]);
 
   const handleCorrect = useCallback(() => {
     if (phase !== "playing" || !currentWordObj) return;
@@ -143,7 +141,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     setPhase("correct");
     setResultsMap((prev) => ({
       ...prev,
-      [currentWordObj.id]: "correct"
+      [currentWordObj.originalIndex]: "correct"
     }));
     timer.pause();
   }, [phase, currentWordObj, timer]);
@@ -151,29 +149,35 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
   const handleSkip = useCallback(() => {
     if (phase !== "playing" || !currentWordObj) return;
 
-    // Record it as skipped
+    // Record it as skipped for now
     setResultsMap((prev) => ({
       ...prev,
-      [currentWordObj.id]: prev[currentWordObj.id] === "correct" ? "correct" : "skip"
+      [currentWordObj.originalIndex]: prev[currentWordObj.originalIndex] === "correct" 
+        ? "correct" 
+        : "skip"
     }));
 
     if (timerMode === "continuous") {
-      // Loop: cycle to the next word in the pool
-      setCurrentIndex((prev) => (prev + 1) % pool.length);
+      // Append the skipped word back to the end of the active queue to go over it again
+      setActiveWords((prev) => [...prev, currentWordObj]);
+      
+      // Keep moving forward down the list. The skipped word will cycle back.
+      setCurrentIndex((prev) => prev + 1);
     } else {
-      // Reset mode: remove from active pool
-      const newPool = pool.filter((_, idx) => idx !== currentIndex);
-      if (newPool.length === 0) {
+      // In reset mode, skip moves directly to the next word
+      const nextIndex = currentIndex + 1;
+      if (nextIndex >= activeWords.length) {
         setPhase("finished");
         timer.pause();
       } else {
-        setPool(newPool);
-        setCurrentIndex(currentIndex % newPool.length);
-        timer.reset(timerSeconds);
-        timer.start();
+        setCurrentIndex(nextIndex);
+        if (timerMode === "reset") {
+          timer.reset(timerSeconds);
+          timer.start();
+        }
       }
     }
-  }, [phase, currentWordObj, timerMode, currentIndex, pool, timer, timerSeconds]);
+  }, [phase, currentWordObj, timerMode, currentIndex, activeWords.length, timer, timerSeconds]);
 
   const handleExit = useCallback(() => {
     exitFullscreen();
@@ -182,7 +186,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
   }, [exitFullscreen, timer, onExit]);
 
   const handlePlayAgain = () => {
-    setPool(words.map((word, id) => ({ id, word })));
+    setActiveWords(words.map((word, idx) => ({ originalIndex: idx, word })));
     setCurrentIndex(0);
     setResultsMap({});
     setCountdownNum(3);
@@ -191,7 +195,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     timer.reset(timerSeconds);
   };
 
-  // Keyboard shortcut listener
+  // Keyboard controls listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (phase === "playing") {
@@ -223,13 +227,13 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [phase, handleCorrect, handleSkip, advanceToNext, handleExit, timerMode]);
 
-  // Construct sequential final results for the stats screen
+  // Transform internal results map to sequential display items
   const finalResults: WordResult[] = words.map((word, idx) => ({
     word,
     result: resultsMap[idx] || "skip",
   }));
 
-  // Timer visualization formulas
+  // Timer visual
   const pct = timerSeconds > 0 ? timer.secondsLeft / timerSeconds : 0;
 
   const getBarColor = () => {
@@ -317,26 +321,15 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     return (
       <div className="fixed inset-0 bg-[#060609] z-50 flex items-center justify-center p-4 overflow-y-auto">
         <div className="max-w-md w-full space-y-6 py-8">
-          <div className="text-center space-y-4">
+          <div className="text-center space-y-3">
             <TrophyIcon className="w-12 h-12 mx-auto text-cyan-400" />
-            <h2 className="text-2xl font-bold text-white uppercase tracking-wider animate-pulse" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+            <h2 className="text-2xl font-bold text-white uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>
               GAME OVER
             </h2>
             
-            {/* ── MASSIVE NEON TIME SPENT DISPLAY ── */}
-            <div className="bg-cyan-500/[0.04] border border-cyan-500/25 rounded-2xl py-6 px-4 shadow-[0_0_30px_rgba(6,182,212,0.1),inset_0_0_20px_rgba(6,182,212,0.05)]">
-              <span className="text-[11px] text-cyan-400/80 font-bold font-mono tracking-[0.3em] uppercase block mb-2">
-                Time Spent Guessing
-              </span>
-              <div className="flex items-baseline justify-center gap-2" style={{ fontFamily: "'Orbitron', monospace" }}>
-                <span className="text-6xl sm:text-7xl font-black text-cyan-400 drop-shadow-[0_0_15px_rgba(34,211,238,0.4)] tracking-wide tabular-nums leading-none">
-                  {timeSpentDisplay.min}:{timeSpentDisplay.sec}
-                </span>
-                <span className="text-gray-700 text-2xl sm:text-3xl font-bold px-1 select-none">/</span>
-                <span className="text-gray-500 text-2xl sm:text-3xl font-semibold tracking-wide tabular-nums">
-                  {timeLimitDisplay.min}:{timeLimitDisplay.sec}
-                </span>
-              </div>
+            {/* Display the spent guessing duration */}
+            <div className="text-gray-400 text-xs font-mono tracking-wider">
+              TIME SPENT: <span className="text-cyan-400 font-bold">{timeSpentDisplay.min}:{timeSpentDisplay.sec}</span> / {timeLimitDisplay.min}:{timeLimitDisplay.sec}
             </div>
           </div>
 
@@ -436,7 +429,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
               }}
               className="mt-4 px-8 py-3 rounded-lg bg-white/10 border border-white/[0.1] text-white font-semibold text-sm hover:bg-white/20 transition-all flex items-center gap-2 mx-auto"
             >
-              {timerMode === "continuous" || currentIndex + 1 >= pool.length ? (
+              {timerMode === "continuous" || currentIndex + 1 >= activeWords.length ? (
                 <>See Results (Enter)</>
               ) : (
                 <>
@@ -482,7 +475,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
               onClick={advanceToNext}
               className="mt-4 px-8 py-3 rounded-lg bg-white/10 border border-white/[0.1] text-white font-semibold text-sm hover:bg-white/20 transition-all flex items-center gap-2 mx-auto"
             >
-              {currentIndex + 1 < pool.length ? (
+              {currentIndex + 1 < activeWords.length ? (
                 <>
                   Next Word (Enter)
                   <ArrowRightIcon className="w-4 h-4" />
@@ -505,9 +498,9 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
         </button>
         <div className="flex items-center gap-3">
           <span className="text-[11px] text-gray-600 font-mono tabular-nums tracking-wider">
-            {Math.min(currentIndex + 1, pool.length)}
+            {Math.min(currentIndex + 1, activeWords.length)}
             <span className="text-gray-800"> / </span>
-            {pool.length}
+            {activeWords.length}
           </span>
         </div>
         <div className="w-8" />
