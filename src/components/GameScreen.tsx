@@ -87,35 +87,6 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, countdownNum]);
 
-  const handleCorrect = () => {
-    setPhase("correct");
-    setResults((prev) => [...prev, { word: currentWord, result: "correct" }]);
-    timer.pause();
-  };
-
-  const handleSkip = () => {
-    // Record the skipped word result
-    setResults((prev) => [...prev, { word: currentWord, result: "skip" }]);
-    
-    // Move immediately to the next word
-    const nextIndex = currentIndex + 1;
-    if (nextIndex >= words.length) {
-      setPhase("finished");
-      timer.pause();
-    } else {
-      setCurrentIndex(nextIndex);
-      setPhase("playing");
-      
-      // If we are in 'reset' mode, start a fresh timer for the new word
-      if (timerMode === "reset") {
-        timer.reset(timerSeconds);
-        timer.start();
-      }
-      // Note: In 'continuous' mode, we do NOT call timer.reset() or timer.pause().
-      // The timer keeps running seamlessly in the background!
-    }
-  };
-
   const advanceToNext = useCallback(() => {
     const nextIndex = currentIndex + 1;
     if (nextIndex >= words.length) {
@@ -133,11 +104,41 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     }
   }, [currentIndex, words.length, timer, timerSeconds, timerMode]);
 
-  const handleExit = () => {
+  const handleCorrect = useCallback(() => {
+    if (phase !== "playing") return;
+    setPhase("correct");
+    setResults((prev) => [...prev, { word: currentWord, result: "correct" }]);
+    timer.pause();
+  }, [phase, currentWord, timer]);
+
+  const handleSkip = useCallback(() => {
+    if (phase !== "playing") return;
+    
+    // Record the skipped word result
+    setResults((prev) => [...prev, { word: currentWord, result: "skip" }]);
+    
+    const nextIndex = currentIndex + 1;
+    if (nextIndex >= words.length) {
+      // If we skipped the final word, complete the game immediately
+      setPhase("finished");
+      timer.pause();
+    } else {
+      setCurrentIndex(nextIndex);
+      setPhase("playing");
+      
+      // If in reset mode, start a fresh stopwatch timer
+      if (timerMode === "reset") {
+        timer.reset(timerSeconds);
+        timer.start();
+      }
+    }
+  }, [phase, currentIndex, currentWord, words.length, timer, timerMode, timerSeconds]);
+
+  const handleExit = useCallback(() => {
     exitFullscreen();
     timer.pause();
     onExit();
-  };
+  }, [exitFullscreen, timer, onExit]);
 
   const handlePlayAgain = () => {
     setCurrentIndex(0);
@@ -148,7 +149,40 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     timer.reset(timerSeconds);
   };
 
-  // Timer visual
+  // Keyboard controls listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (phase === "playing") {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleCorrect();
+        } else if (e.key === "ArrowRight" || e.key.toLowerCase() === "p") {
+          e.preventDefault();
+          handleSkip();
+        }
+      } else if (phase === "correct" || phase === "timeout") {
+        // Pressing Space/Enter on confirmation overlays advances to next word
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          if (phase === "timeout" && timerMode === "continuous") {
+            setPhase("finished");
+          } else {
+            advanceToNext();
+          }
+        }
+      }
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        handleExit();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [phase, handleCorrect, handleSkip, advanceToNext, handleExit, timerMode]);
+
+  // Timer visual math
   const pct = timerSeconds > 0 ? timer.secondsLeft / timerSeconds : 0;
 
   const getBarColor = () => {
@@ -338,10 +372,10 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
               className="mt-4 px-8 py-3 rounded-lg bg-white/10 border border-white/[0.1] text-white font-semibold text-sm hover:bg-white/20 transition-all flex items-center gap-2 mx-auto"
             >
               {timerMode === "continuous" || currentIndex + 1 >= words.length ? (
-                <>See Results</>
+                <>See Results (Enter)</>
               ) : (
                 <>
-                  Next Word
+                  Next Word (Enter)
                   <ArrowRightIcon className="w-4 h-4" />
                 </>
               )}
@@ -385,11 +419,11 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
             >
               {currentIndex + 1 < words.length ? (
                 <>
-                  Next Word
+                  Next Word (Enter)
                   <ArrowRightIcon className="w-4 h-4" />
                 </>
               ) : (
-                <>See Results</>
+                <>See Results (Enter)</>
               )}
             </button>
           </div>
@@ -464,14 +498,14 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
               className="flex-1 py-4 rounded-lg bg-white/[0.05] border border-white/[0.08] text-gray-400 font-semibold text-sm hover:bg-white/[0.1] hover:text-gray-300 active:scale-[0.97] transition-all flex items-center justify-center gap-2"
             >
               <SkipIcon className="w-5 h-5" />
-              PASS
+              PASS (→)
             </button>
             <button
               onClick={handleCorrect}
               className="flex-1 py-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/20 active:scale-[0.97] transition-all flex items-center justify-center gap-2"
             >
               <CheckIcon className="w-5 h-5" />
-              CORRECT
+              CORRECT (Space)
             </button>
           </div>
         </div>
