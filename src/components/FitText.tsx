@@ -10,7 +10,7 @@ interface FitTextProps {
 export default function FitText({
   text,
   className = "",
-  maxFontSize = 500,
+  maxFontSize = 800,
   minFontSize = 24,
 }: FitTextProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -23,24 +23,26 @@ export default function FitText({
     const textEl = textRef.current;
     if (!container || !textEl) return;
 
-    // Temporarily hide text during the binary search calculation to prevent visual jumping
     setReady(false);
 
-    const containerWidth = container.clientWidth;
-    // Fallback to a viewport-relative calculation if height isn't fully initialized
-    const maxHeight = container.clientHeight || window.innerHeight * 0.4;
+    // Use almost the full width of the container
+    const containerWidth = container.clientWidth * 0.95;
+    
+    // Give it a generous vertical limit (80% of container height or 55% of the viewport)
+    const maxHeight = (container.clientHeight || window.innerHeight * 0.55) * 0.9;
 
     let lo = minFontSize;
     let hi = maxFontSize;
     let best = minFontSize;
 
-    // Binary search to find the perfect fitting font size
     while (lo <= hi) {
       const mid = Math.floor((lo + hi) / 2);
       textEl.style.fontSize = `${mid}px`;
       
-      const fits = textEl.scrollWidth <= containerWidth && textEl.scrollHeight <= maxHeight;
-      if (fits) {
+      const fitsWidth = textEl.scrollWidth <= containerWidth;
+      const fitsHeight = textEl.scrollHeight <= maxHeight;
+
+      if (fitsWidth && fitsHeight) {
         best = mid;
         lo = mid + 1;
       } else {
@@ -48,11 +50,9 @@ export default function FitText({
       }
     }
 
-    // Set final font styles
     textEl.style.fontSize = `${best}px`;
     setFontSize(best);
     
-    // Smoothly fade in the beautifully sized word
     requestAnimationFrame(() => {
       setReady(true);
     });
@@ -62,10 +62,8 @@ export default function FitText({
     const container = containerRef.current;
     if (!container) return;
 
-    // Trigger calculation when the word text changes
     resize();
 
-    // Use ResizeObserver to catch any size adjustments of the parent container
     const observer = new ResizeObserver(() => {
       requestAnimationFrame(() => resize());
     });
@@ -79,18 +77,19 @@ export default function FitText({
   return (
     <div
       ref={containerRef}
-      className="w-full h-full min-h-0 overflow-hidden flex items-center justify-center"
+      className="w-full h-full min-h-[40vh] overflow-hidden flex items-center justify-center"
     >
       <span
         ref={textRef}
         className={className}
         style={{
           fontSize: `${fontSize}px`,
+          fontFamily: 'Impact, "Arial Black", "Arial Bold", sans-serif',
           display: "inline-block",
           whiteSpace: "nowrap",
-          lineHeight: 0.9, // Tighter line-height keeps tall uppercase letters vertically centered
+          lineHeight: "0.85", // Perfect vertical centering and compact size for Impact
           opacity: ready ? 1 : 0,
-          transition: "opacity 0.1s ease-out",
+          transition: "opacity 0.08s ease-out",
         }}
       >
         {text}
