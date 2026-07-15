@@ -17,40 +17,71 @@ interface GameScreenProps {
   onExit: () => void;
 }
 
+interface WordState {
+  originalIndex: number;
+  word: string;
+}
+
 interface WordResult {
   word: string;
   result: "correct" | "timeout" | "skip";
 }
 
 export default function GameScreen({ words, timerSeconds, timerMode, onExit }: GameScreenProps) {
+  // We keep an active queue of words to play. Skipped words will be appended back to the end.
+  const [activeWords, setActiveWords] = useState<WordState[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [phase, setPhase] = useState<GamePhase>("ready");
-  const [results, setResults] = useState<WordResult[]>([]);
+  
+  // Track final word statuses indexed by original word order
+  const [resultsMap, setResultsMap] = useState<Record<number, "correct" | "timeout" | "skip">>({});
   const [countdownNum, setCountdownNum] = useState(3);
+  
   const { enterFullscreen, exitFullscreen } = useFullscreen();
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const timerStartedRef = useRef(false);
 
-  const currentWord = currentIndex < words.length ? words[currentIndex] : "";
+  // Initialize the word list queue on mount or restart
+  useEffect(() => {
+    setActiveWords(words.map((word, idx) => ({ originalIndex: idx, word })));
+  }, [words]);
+
+  const currentWordObj = currentIndex < activeWords.length ? activeWords[currentIndex] : null;
+  const currentWord = currentWordObj ? currentWordObj.word : "";
 
   const handleTimeout = useCallback(() => {
+    setPhase("timeout");
+    
+    // In continuous mode, the game ends when time runs out
     if (timerMode === "continuous") {
-      setPhase("timeout");
-      setResults((prev) => {
-        const remaining: WordResult[] = [];
-        remaining.push({ word: words[prev.length] || "", result: "timeout" });
-        return [...prev, ...remaining];
+      setResultsMap((prev) => {
+        const updated = { ...prev };
+        // Mark all remaining un-guessed words in the queue as timed out
+        activeWords.slice(currentIndex).forEach((w) => {
+          if (updated[w.originalIndex] !== "correct") {
+            updated[w.originalIndex] = "timeout";
+          }
+        });
+        return updated;
       });
     } else {
-      setPhase("timeout");
-      setResults((prev) => [...prev, { word: words[currentIndex], result: "timeout" }]);
+      // Per-word reset mode: just mark the current single word as timed out
+      if (currentWordObj) {
+        setResultsMap((prev) => ({
+          ...prev,
+          [currentWordObj.originalIndex]: "timeout"
+        }));
+      }
     }
-  }, [timerMode, words, currentIndex]);
+  }, [timerMode, activeWords, currentIndex, currentWordObj]);
 
   const timer = useTimer({
     initialSeconds: timerSeconds,
     onTimeout: handleTimeout,
   });
+
+  // Calculate elapsed time spent guessing
+  const timeSpentSeconds = timerSeconds - timer.secondsLeft;
 
   // Wake lock
   useEffect(() => {
@@ -89,7 +120,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
 
   const advanceToNext = useCallback(() => {
     const nextIndex = currentIndex + 1;
-    if (nextIndex >= words.length) {
+    if (nextIndex >= activeWords.length) {
       setPhase("finished");
       timer.pause();
     } else {
@@ -102,37 +133,51 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
         timer.start();
       }
     }
-  }, [currentIndex, words.length, timer, timerSeconds, timerMode]);
+  }, [currentIndex, activeWords.length, timer, timerSeconds, timerMode]);
 
   const handleCorrect = useCallback(() => {
-    if (phase !== "playing") return;
+    if (phase !== "playing" || !currentWordObj) return;
+    
     setPhase("correct");
-    setResults((prev) => [...prev, { word: currentWord, result: "correct" }]);
+    setResultsMap((prev) => ({
+      ...prev,
+      [currentWordObj.originalIndex]: "correct"
+    }));
     timer.pause();
-  }, [phase, currentWord, timer]);
+  }, [phase, currentWordObj, timer]);
 
   const handleSkip = useCallback(() => {
-    if (phase !== "playing") return;
-    
-    // Record the skipped word result
-    setResults((prev) => [...prev, { word: currentWord, result: "skip" }]);
-    
-    const nextIndex = currentIndex + 1;
-    if (nextIndex >= words.length) {
-      // If we skipped the final word, complete the game immediately
-      setPhase("finished");
-      timer.pause();
-    } else {
-      setCurrentIndex(nextIndex);
-      setPhase("playing");
+    if (phase !== "playing" || !currentWordObj) return;
+
+    // Record it as skipped for now
+    setResultsMap((prev) => ({
+      ...prev,
+      [currentWordObj.originalIndex]: prev[currentWordObj.originalIndex] === "correct" 
+        ? "correct" 
+        : "skip"
+    }));
+
+    if (timerMode === "continuous") {
+      // Append the skipped word back to the end of the active queue to go over it again
+      setActiveWords((prev) => [...prev, currentWordObj]);
       
-      // If in reset mode, start a fresh stopwatch timer
-      if (timerMode === "reset") {
-        timer.reset(timerSeconds);
-        timer.start();
+      // Keep moving forward down the list. The skipped word will cycle back.
+      setCurrentIndex((prev) => prev + 1);
+    } else {
+      // In reset mode, skip moves directly to the next word
+      const nextIndex = currentIndex + 1;
+      if (nextIndex >= activeWords.length) {
+        setPhase("finished");
+        timer.pause();
+      } else {
+        setCurrentIndex(nextIndex);
+        if (timerMode === "reset") {
+          timer.reset(timerSeconds);
+          timer.start();
+        }
       }
     }
-  }, [phase, currentIndex, currentWord, words.length, timer, timerMode, timerSeconds]);
+  }, [phase, currentWordObj, timerMode, currentIndex, activeWords.length, timer, timerSeconds]);
 
   const handleExit = useCallback(() => {
     exitFullscreen();
@@ -141,8 +186,9 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
   }, [exitFullscreen, timer, onExit]);
 
   const handlePlayAgain = () => {
+    setActiveWords(words.map((word, idx) => ({ originalIndex: idx, word })));
     setCurrentIndex(0);
-    setResults([]);
+    setResultsMap({});
     setCountdownNum(3);
     setPhase("ready");
     timerStartedRef.current = false;
@@ -161,7 +207,6 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
           handleSkip();
         }
       } else if (phase === "correct" || phase === "timeout") {
-        // Pressing Space/Enter on confirmation overlays advances to next word
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           if (phase === "timeout" && timerMode === "continuous") {
@@ -182,7 +227,13 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [phase, handleCorrect, handleSkip, advanceToNext, handleExit, timerMode]);
 
-  // Timer visual math
+  // Transform internal results map to sequential display items
+  const finalResults: WordResult[] = words.map((word, idx) => ({
+    word,
+    result: resultsMap[idx] || "skip",
+  }));
+
+  // Timer visual
   const pct = timerSeconds > 0 ? timer.secondsLeft / timerSeconds : 0;
 
   const getBarColor = () => {
@@ -222,6 +273,8 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
   };
 
   const timerDisplay = fmtTimer(timer.secondsLeft);
+  const timeSpentDisplay = fmtTimer(timeSpentSeconds);
+  const timeLimitDisplay = fmtTimer(timerSeconds);
   const isUrgent = timer.secondsLeft <= 10 && timer.isRunning;
 
   // ── READY SCREEN ──
@@ -261,18 +314,23 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
 
   // ── FINISHED SCREEN ──
   if (phase === "finished") {
-    const correct = results.filter((r) => r.result === "correct").length;
-    const timeouts = results.filter((r) => r.result === "timeout").length;
-    const skips = results.filter((r) => r.result === "skip").length;
+    const correct = finalResults.filter((r) => r.result === "correct").length;
+    const timeouts = finalResults.filter((r) => r.result === "timeout").length;
+    const skips = finalResults.filter((r) => r.result === "skip").length;
 
     return (
       <div className="fixed inset-0 bg-[#060609] z-50 flex items-center justify-center p-4 overflow-y-auto">
         <div className="max-w-md w-full space-y-6 py-8">
           <div className="text-center space-y-3">
             <TrophyIcon className="w-12 h-12 mx-auto text-cyan-400" />
-            <h2 className="text-2xl font-bold text-white" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+            <h2 className="text-2xl font-bold text-white uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>
               GAME OVER
             </h2>
+            
+            {/* Display the spent guessing duration */}
+            <div className="text-gray-400 text-xs font-mono tracking-wider">
+              TIME SPENT: <span className="text-cyan-400 font-bold">{timeSpentDisplay.min}:{timeSpentDisplay.sec}</span> / {timeLimitDisplay.min}:{timeLimitDisplay.sec}
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-2">
@@ -291,7 +349,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
           </div>
 
           <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg divide-y divide-white/[0.04]">
-            {results.map((r, i) => (
+            {finalResults.map((r, i) => (
               <div key={i} className="flex items-center justify-between py-2.5 px-4">
                 <div className="flex items-center gap-3">
                   <span className="text-[11px] text-gray-700 font-mono tabular-nums w-4 text-right">{i + 1}</span>
@@ -371,7 +429,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
               }}
               className="mt-4 px-8 py-3 rounded-lg bg-white/10 border border-white/[0.1] text-white font-semibold text-sm hover:bg-white/20 transition-all flex items-center gap-2 mx-auto"
             >
-              {timerMode === "continuous" || currentIndex + 1 >= words.length ? (
+              {timerMode === "continuous" || currentIndex + 1 >= activeWords.length ? (
                 <>See Results (Enter)</>
               ) : (
                 <>
@@ -417,7 +475,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
               onClick={advanceToNext}
               className="mt-4 px-8 py-3 rounded-lg bg-white/10 border border-white/[0.1] text-white font-semibold text-sm hover:bg-white/20 transition-all flex items-center gap-2 mx-auto"
             >
-              {currentIndex + 1 < words.length ? (
+              {currentIndex + 1 < activeWords.length ? (
                 <>
                   Next Word (Enter)
                   <ArrowRightIcon className="w-4 h-4" />
@@ -440,9 +498,9 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
         </button>
         <div className="flex items-center gap-3">
           <span className="text-[11px] text-gray-600 font-mono tabular-nums tracking-wider">
-            {currentIndex + 1}
+            {Math.min(currentIndex + 1, activeWords.length)}
             <span className="text-gray-800"> / </span>
-            {words.length}
+            {activeWords.length}
           </span>
         </div>
         <div className="w-8" />
