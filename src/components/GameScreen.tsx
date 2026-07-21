@@ -580,7 +580,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
 
       {/* ── WORD AREA ── */}
       <div className="relative z-10 flex-[3] flex flex-col items-center justify-center px-4 sm:px-12 w-full min-h-[50vh] py-6 overflow-hidden">
-        <div className="w-full max-w-7xl h-full flex flex-col items-center justify-center min-h-0 gap-6 sm:gap-8">
+        <div className="w-[80vw] mx-auto h-full flex flex-col items-center justify-center min-h-0 gap-6 sm:gap-8">
           {formattedLines.map((lineText, idx) => (
             <div key={idx} className="w-full flex-1 flex items-center justify-center min-h-0 max-h-[22vh]">
               <FitText
