@@ -27,18 +27,27 @@ interface WordResult {
   result: "correct" | "timeout" | "skip";
 }
 
-// Compound phrases to treat as single tokens
-const COMPOUND_PHRASES = ["La Union"];
+// Compound phrases to protect during auto-split fallback
+const COMPOUND_PHRASES = ["La Union", "Province of La Union"];
 
-// Formats phrase to strict max 2 lines with min 3 letters per word constraint
 const getFormattedLines = (phrase: string): string[] => {
   if (!phrase) return [];
 
+  // METHOD 2: Respect explicit newlines if provided (e.g. "Province of\nLa Union")
+  if (phrase.includes("\n")) {
+    return phrase
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+
+  // FALLBACK: Auto-format single-line phrases into max 2 lines
   let tempPhrase = phrase;
   const matches: string[] = [];
 
-  // Protect compound phrases using placeholders
-  COMPOUND_PHRASES.forEach((cp, idx) => {
+  const sortedPhrases = [...COMPOUND_PHRASES].sort((a, b) => b.length - a.length);
+
+  sortedPhrases.forEach((cp, idx) => {
     const regex = new RegExp(cp, "gi");
     if (regex.test(tempPhrase)) {
       tempPhrase = tempPhrase.replace(regex, `__CP${idx}__`);
@@ -46,7 +55,7 @@ const getFormattedLines = (phrase: string): string[] => {
     }
   });
 
-  // Tokenize & filter out words with less than 3 letters
+  // Tokenize & filter short standalone words (< 3 letters) unless protected
   let tokens = tempPhrase
     .trim()
     .split(/\s+/)
@@ -58,9 +67,9 @@ const getFormattedLines = (phrase: string): string[] => {
       return token;
     })
     .filter((token) => {
-      // Check letter count >= 3
+      const isProtected = matches.includes(token);
       const lettersOnly = token.replace(/[^a-zA-Z]/g, "");
-      return lettersOnly.length >= 3;
+      return isProtected || lettersOnly.length >= 3;
     });
 
   if (tokens.length === 0) return [];
@@ -71,11 +80,8 @@ const getFormattedLines = (phrase: string): string[] => {
     return [tokens[0], tokens[1]];
   }
 
-  // 3 or more words -> 1st word on Line 1, remaining words on Line 2
-  const line1 = tokens[0];
-  const line2 = tokens.slice(1).join(" ");
-
-  return [line1, line2];
+  // 3+ tokens -> 1st token on Line 1, remaining tokens on Line 2
+  return [tokens[0], tokens.slice(1).join(" ")];
 };
 
 export default function GameScreen({ words, timerSeconds, timerMode, onExit }: GameScreenProps) {
@@ -261,7 +267,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
   }, [phase, handleCorrect, handleSkip, advanceToNext, handleExit, timerMode]);
 
   const finalResults: WordResult[] = words.map((word, idx) => ({
-    word,
+    word: word.replace(/\n/g, " "),
     result: resultsMap[idx] || "skip",
   }));
 
