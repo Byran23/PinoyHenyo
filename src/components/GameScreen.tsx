@@ -27,13 +27,19 @@ interface WordResult {
   result: "correct" | "timeout" | "skip";
 }
 
-// Compound phrases to protect during auto-split fallback
-const COMPOUND_PHRASES = ["La Union", "Province of La Union"];
+// Compound phrases to keep intact on a single line
+const COMPOUND_PHRASES = [
+  "Davao City",
+  "La Union",
+  "Province of La Union",
+  "Quezon City",
+  "Cebu City",
+];
 
 const getFormattedLines = (phrase: string): string[] => {
   if (!phrase) return [];
 
-  // METHOD 2: Respect explicit newlines if provided (e.g. "Province of\nLa Union")
+  // METHOD 2: Respect explicit newlines if provided (e.g. "Davao City\nMindanao")
   if (phrase.includes("\n")) {
     return phrase
       .split("\n")
@@ -45,6 +51,7 @@ const getFormattedLines = (phrase: string): string[] => {
   let tempPhrase = phrase;
   const matches: string[] = [];
 
+  // Sort compound phrases longest first so longer terms match first
   const sortedPhrases = [...COMPOUND_PHRASES].sort((a, b) => b.length - a.length);
 
   sortedPhrases.forEach((cp, idx) => {
@@ -55,7 +62,7 @@ const getFormattedLines = (phrase: string): string[] => {
     }
   });
 
-  // Tokenize & filter short standalone words (< 3 letters) unless protected
+  // Tokenize & filter out short standalone words (< 3 letters) unless protected
   let tokens = tempPhrase
     .trim()
     .split(/\s+/)
@@ -73,9 +80,11 @@ const getFormattedLines = (phrase: string): string[] => {
     });
 
   if (tokens.length === 0) return [];
+  
+  // Single phrase or compound token -> 1 line
   if (tokens.length === 1) return [tokens[0]];
 
-  // Exactly 2 words -> 1 word per line
+  // Exactly 2 tokens -> 1 token per line
   if (tokens.length === 2) {
     return [tokens[0], tokens[1]];
   }
