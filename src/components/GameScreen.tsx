@@ -475,8 +475,8 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
                 {formattedLines.map((lineText, idx) => (
                   <p
                     key={idx}
-                    className="text-2xl sm:text-4xl font-bold text-red-200 tracking-widest uppercase leading-tight"
-                    style={{ fontFamily: "'Orbitron', monospace" }}
+                    className="text-2xl sm:text-4xl font-bold text-red-200 uppercase leading-tight"
+                    style={{ fontFamily: "'Orbitron', monospace", letterSpacing: "normal" }}
                   >
                     {lineText}
                   </p>
@@ -534,8 +534,8 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
                 {formattedLines.map((lineText, idx) => (
                   <p
                     key={idx}
-                    className="text-2xl sm:text-4xl font-bold text-emerald-200 tracking-widest uppercase leading-tight"
-                    style={{ fontFamily: "'Orbitron', monospace" }}
+                    className="text-2xl sm:text-4xl font-bold text-emerald-200 uppercase leading-tight"
+                    style={{ fontFamily: "'Orbitron', monospace", letterSpacing: "normal" }}
                   >
                     {lineText}
                   </p>
@@ -585,7 +585,8 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
             <div key={idx} className="w-full flex-1 flex items-center justify-center min-h-0 max-h-[22vh]">
               <FitText
                 text={lineText}
-                className="text-white uppercase text-center tracking-tight whitespace-nowrap leading-none font-bold"
+                className="text-white uppercase text-center tracking-normal whitespace-nowrap leading-none font-bold"
+                style={{ letterSpacing: "normal" }}
                 maxFontSize={600}
                 minFontSize={36}
               />
