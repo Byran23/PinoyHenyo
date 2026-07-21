@@ -348,14 +348,14 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
           <div key={countdownNum} className="animate-ping-once">
             {countdownNum > 0 ? (
               <span
-                className="text-[12rem] sm:text-[16rem] font-bold text-white leading-none block tabular-nums"
+                className="text-[12rem] sm:text-[16rem] font-semibold text-white leading-none block tabular-nums"
                 style={{ fontFamily: "'Orbitron', monospace" }}
               >
                 {countdownNum}
               </span>
             ) : (
               <span
-                className="text-7xl sm:text-9xl font-bold text-cyan-400 leading-none block tracking-[0.2em]"
+                className="text-7xl sm:text-9xl font-semibold text-cyan-400 leading-none block tracking-[0.2em]"
                 style={{ fontFamily: "'Orbitron', monospace" }}
               >
                 GO
@@ -389,21 +389,21 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
               GAME OVER
             </h2>
             <div className="text-gray-400 text-xs font-mono tracking-wider">
-              TIME SPENT: <span className="text-cyan-400 font-bold">{timeSpentDisplay.min}:{timeSpentDisplay.sec}</span> / {timeLimitDisplay.min}:{timeLimitDisplay.sec}
+              TIME SPENT: <span className="text-cyan-400 font-semibold">{timeSpentDisplay.min}:{timeSpentDisplay.sec}</span> / {timeLimitDisplay.min}:{timeLimitDisplay.sec}
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-2">
             <div className="bg-emerald-500/[0.08] border border-emerald-500/[0.15] rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-emerald-400 tabular-nums" style={{ fontFamily: "'Orbitron', monospace" }}>{correct}</div>
+              <div className="text-2xl font-semibold text-emerald-400 tabular-nums" style={{ fontFamily: "'Orbitron', monospace" }}>{correct}</div>
               <div className="text-emerald-500/60 text-[10px] font-semibold mt-0.5 uppercase tracking-wider">Correct</div>
             </div>
             <div className="bg-red-500/[0.08] border border-red-500/[0.15] rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-red-400 tabular-nums" style={{ fontFamily: "'Orbitron', monospace" }}>{timeouts}</div>
+              <div className="text-2xl font-semibold text-red-400 tabular-nums" style={{ fontFamily: "'Orbitron', monospace" }}>{timeouts}</div>
               <div className="text-red-500/60 text-[10px] font-semibold mt-0.5 uppercase tracking-wider">Timed Out</div>
             </div>
             <div className="bg-gray-500/[0.08] border border-gray-500/[0.15] rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-gray-400 tabular-nums" style={{ fontFamily: "'Orbitron', monospace" }}>{skips}</div>
+              <div className="text-2xl font-semibold text-gray-400 tabular-nums" style={{ fontFamily: "'Orbitron', monospace" }}>{skips}</div>
               <div className="text-gray-500/60 text-[10px] font-semibold mt-0.5 uppercase tracking-wider">Skipped</div>
             </div>
           </div>
@@ -415,7 +415,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
                   <span className="text-[11px] text-gray-700 font-mono tabular-nums w-4 text-right">{i + 1}</span>
                   <span className="font-semibold text-sm text-gray-300">{r.word}</span>
                 </div>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-wider ${
                   r.result === "correct"
                     ? "bg-emerald-500/10 text-emerald-400"
                     : r.result === "timeout"
@@ -462,7 +462,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
             </div>
 
             <h2
-              className="text-4xl sm:text-6xl md:text-7xl font-bold text-white tracking-wider uppercase"
+              className="text-4xl sm:text-6xl md:text-7xl font-semibold text-white tracking-wider uppercase"
               style={{ fontFamily: "'Orbitron', monospace", textShadow: "0 0 40px rgba(239,68,68,0.4)" }}
             >
               TIME OUT
@@ -475,7 +475,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
                 {formattedLines.map((lineText, idx) => (
                   <p
                     key={idx}
-                    className="text-2xl sm:text-4xl font-bold text-red-200 uppercase leading-tight"
+                    className="text-2xl sm:text-4xl font-semibold text-red-200 uppercase leading-tight"
                     style={{ fontFamily: "'Orbitron', monospace", letterSpacing: "normal" }}
                   >
                     {lineText}
@@ -522,7 +522,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
             </div>
 
             <h2
-              className="text-4xl sm:text-6xl md:text-7xl font-bold text-white tracking-wider uppercase"
+              className="text-4xl sm:text-6xl md:text-7xl font-semibold text-white tracking-wider uppercase"
               style={{ fontFamily: "'Orbitron', monospace", textShadow: "0 0 40px rgba(16,185,129,0.4)" }}
             >
               CORRECT
@@ -534,7 +534,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
                 {formattedLines.map((lineText, idx) => (
                   <p
                     key={idx}
-                    className="text-2xl sm:text-4xl font-bold text-emerald-200 uppercase leading-tight"
+                    className="text-2xl sm:text-4xl font-semibold text-emerald-200 uppercase leading-tight"
                     style={{ fontFamily: "'Orbitron', monospace", letterSpacing: "normal" }}
                   >
                     {lineText}
@@ -585,7 +585,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
             <div key={idx} className="w-full flex-1 flex items-center justify-center min-h-0 max-h-[22vh]">
               <FitText
                 text={lineText}
-                className="text-white uppercase text-center tracking-normal whitespace-nowrap leading-none font-bold"
+                className="text-white uppercase text-center tracking-normal whitespace-nowrap leading-none font-semibold"
                 style={{ letterSpacing: "normal" }}
                 maxFontSize={600}
                 minFontSize={36}
@@ -600,13 +600,13 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
         <div className="relative z-10">
           <div className={`text-center pb-2 ${isUrgent ? "animate-pulse-fast" : ""}`}>
             <div className="inline-flex items-baseline gap-0.5" style={{ fontFamily: "'Orbitron', monospace" }}>
-              <span className={`text-7xl sm:text-8xl md:text-9xl font-bold tabular-nums ${getDigitColor()} transition-colors duration-500`}>
+              <span className={`text-7xl sm:text-8xl md:text-9xl font-semibold tabular-nums ${getDigitColor()} transition-colors duration-500`}>
                 {timerDisplay.min}
               </span>
-              <span className={`text-6xl sm:text-7xl md:text-8xl font-bold ${getColonColor()} transition-colors duration-500 ${timer.isRunning ? "animate-blink" : ""}`}>
+              <span className={`text-6xl sm:text-7xl md:text-8xl font-semibold ${getColonColor()} transition-colors duration-500 ${timer.isRunning ? "animate-blink" : ""}`}>
                 :
               </span>
-              <span className={`text-7xl sm:text-8xl md:text-9xl font-bold tabular-nums ${getDigitColor()} transition-colors duration-500`}>
+              <span className={`text-7xl sm:text-8xl md:text-9xl font-semibold tabular-nums ${getDigitColor()} transition-colors duration-500`}>
                 {timerDisplay.sec}
               </span>
             </div>
@@ -633,7 +633,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
             </button>
             <button
               onClick={handleCorrect}
-              className="flex-1 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/20 active:scale-[0.97] transition-all flex items-center justify-center gap-2"
+              className="flex-1 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm shadow-lg shadow-emerald-600/20 active:scale-[0.97] transition-all flex items-center justify-center gap-2"
             >
               <CheckIcon className="w-5 h-5" />
               CORRECT (Space)
