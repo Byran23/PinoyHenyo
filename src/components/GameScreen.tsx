@@ -48,8 +48,9 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
 
   const currentWordObj = currentIndex < activeWords.length ? activeWords[currentIndex] : null;
   const currentWord = currentWordObj ? currentWordObj.word : "";
-  // Split words by space onto separate lines (1 word = 1 line, 2 words = 2 lines, etc.)
-  const formattedWord = currentWord.trim().split(/\s+/).join("\n");
+
+  // Split current phrase into individual words for multi-line layout
+  const splitWords = currentWord ? currentWord.trim().split(/\s+/) : [];
 
   const handleTimeout = useCallback(() => {
     setPhase("timeout");
@@ -413,12 +414,17 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
 
             <div>
               <p className="text-red-300/50 text-xs uppercase tracking-[0.25em] mb-3">The word was</p>
-              <p
-                className="text-3xl sm:text-5xl font-black text-red-200 tracking-widest whitespace-pre-line leading-tight"
-                style={{ fontFamily: "'Orbitron', monospace" }}
-              >
-                {formattedWord}
-              </p>
+              <div className="flex flex-col items-center justify-center gap-1">
+                {splitWords.map((w, idx) => (
+                  <p
+                    key={idx}
+                    className="text-3xl sm:text-5xl font-black text-red-200 tracking-widest uppercase"
+                    style={{ fontFamily: "'Orbitron', monospace" }}
+                  >
+                    {w}
+                  </p>
+                ))}
+              </div>
             </div>
 
             <button
@@ -466,12 +472,17 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
             </h2>
             <div className="h-px w-32 mx-auto bg-gradient-to-r from-transparent via-emerald-500 to-transparent" />
 
-            <p
-              className="text-3xl sm:text-5xl font-black text-emerald-200 tracking-widest whitespace-pre-line leading-tight"
-              style={{ fontFamily: "'Orbitron', monospace" }}
-            >
-              {formattedWord}
-            </p>
+            <div className="flex flex-col items-center justify-center gap-1">
+              {splitWords.map((w, idx) => (
+                <p
+                  key={idx}
+                  className="text-3xl sm:text-5xl font-black text-emerald-200 tracking-widest uppercase"
+                  style={{ fontFamily: "'Orbitron', monospace" }}
+                >
+                  {w}
+                </p>
+              ))}
+            </div>
 
             <button
               onClick={advanceToNext}
@@ -510,13 +521,17 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
 
       {/* ── WORD AREA ── */}
       <div className="relative z-10 flex-[3] flex flex-col items-center justify-center px-4 sm:px-8 w-full min-h-[50vh] overflow-hidden">
-        <div className="w-full h-full flex items-center justify-center min-h-0">
-          <FitText
-            text={formattedWord}
-            className="text-white uppercase text-center tracking-normal whitespace-pre-line leading-none"
-            maxFontSize={800}
-            minFontSize={48}
-          />
+        <div className="w-full h-full flex flex-col items-center justify-center min-h-0 gap-2">
+          {splitWords.map((word, idx) => (
+            <div key={idx} className="w-full flex-1 flex items-center justify-center min-h-0">
+              <FitText
+                text={word}
+                className="text-white uppercase text-center tracking-normal whitespace-nowrap"
+                maxFontSize={800}
+                minFontSize={48}
+              />
+            </div>
+          ))}
         </div>
       </div>
 
