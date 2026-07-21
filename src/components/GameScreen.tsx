@@ -36,6 +36,8 @@ const COMPOUND_PHRASES = [
   "Cebu City",
 ];
 
+// Target uniform splitting rule: 3 lines, max 15 chars per line
+const TARGET_LINES = 3;
 const MAX_CHAR_PER_LINE = 15;
 
 const getFormattedLines = (phrase: string): string[] => {
@@ -76,29 +78,42 @@ const getFormattedLines = (phrase: string): string[] => {
     .filter((token) => {
       const isProtected = matches.includes(token);
       const lettersOnly = token.replace(/[^a-zA-Z]/g, "");
-      return isProtected || lettersOnly.length >= 3;
+      return isProtected || lettersOnly.length >= TARGET_LINES;
     });
 
   if (tokens.length === 0) return [];
 
-  // Pack tokens into lines respecting MAX_CHAR_PER_LINE limit
+  // Logic to uniformly split into TARGET_LINES (3)
   const lines: string[] = [];
-  let currentLine = "";
+  let currentLineTokens: string[] = [];
+  let currentLineLength = 0;
 
-  tokens.forEach((token) => {
-    if (!currentLine) {
-      currentLine = token;
-    } else if ((currentLine + " " + token).length <= MAX_CHAR_PER_LINE) {
-      currentLine += " " + token;
+  tokens.forEach((token, index) => {
+    // Basic greedy packing, but aware of the 15 char limit
+    if (currentLineTokens.length === 0) {
+      currentLineTokens.push(token);
+      currentLineLength = token.length;
+    } else if ((currentLineLength + 1 + token.length) <= MAX_CHAR_PER_LINE) {
+      currentLineTokens.push(token);
+      currentLineLength += 1 + token.length;
     } else {
-      lines.push(currentLine);
-      currentLine = token;
+      lines.push(currentLineTokens.join(" "));
+      currentLineTokens = [token];
+      currentLineLength = token.length;
+    }
+    
+    // Safety check: force flush if we reach TARGET_LINES - 1, packing rest on last line
+    // or if we processed all tokens.
+    if (index === tokens.length - 1 || lines.length >= TARGET_LINES - 1) {
+        // Collect everything remaining into currentLineTokens if not last token
+        if(index < tokens.length - 1) {
+            currentLineTokens.push(...tokens.slice(index+1));
+        }
+        lines.push(currentLineTokens.join(" "));
+        // Break from loop as we've packed everything
+        return; 
     }
   });
-
-  if (currentLine) {
-    lines.push(currentLine);
-  }
 
   return lines;
 };
@@ -572,12 +587,12 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
 
       {/* ── WORD AREA ── */}
       <div className="relative z-10 flex-[3] flex flex-col items-center justify-center px-4 sm:px-8 w-full min-h-[50vh] overflow-hidden">
-        <div className="w-full h-full flex flex-col items-center justify-center min-h-0 gap-2">
+        <div className="w-full h-full flex flex-col items-center justify-center min-h-0 gap-1 sm:gap-2">
           {formattedLines.map((lineText, idx) => (
-            <div key={idx} className="w-full flex-1 flex items-center justify-center min-h-0">
+            <div key={idx} className="w-full flex-1 flex items-center justify-center min-h-0 max-h-[30%]">
               <FitText
                 text={lineText}
-                className="text-white uppercase text-center tracking-normal whitespace-nowrap"
+                className="text-white uppercase text-center tracking-normal whitespace-nowrap leading-none font-bold"
                 maxFontSize={800}
                 minFontSize={48}
               />
@@ -589,7 +604,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
       {/* ── TIMER SECTION ── */}
       {phase === "playing" && (
         <div className="relative z-10">
-          <div className={`text-center pb-4 ${isUrgent ? "animate-pulse-fast" : ""}`}>
+          <div className={`text-center pb-2 ${isUrgent ? "animate-pulse-fast" : ""}`}>
             <div className="inline-flex items-baseline gap-0.5" style={{ fontFamily: "'Orbitron', monospace" }}>
               <span className={`text-7xl sm:text-8xl md:text-9xl font-black tabular-nums ${getDigitColor()} transition-colors duration-500`}>
                 {timerDisplay.min}
@@ -614,17 +629,17 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
             />
           </div>
 
-          <div className="px-4 py-4 flex gap-3 max-w-lg mx-auto">
+          <div className="px-4 py-3 flex gap-3 max-w-lg mx-auto">
             <button
               onClick={handleSkip}
-              className="flex-1 py-4 rounded-lg bg-white/[0.05] border border-white/[0.08] text-gray-400 font-semibold text-sm hover:bg-white/[0.1] hover:text-gray-300 active:scale-[0.97] transition-all flex items-center justify-center gap-2"
+              className="flex-1 py-3 rounded-lg bg-white/[0.05] border border-white/[0.08] text-gray-400 font-semibold text-sm hover:bg-white/[0.1] hover:text-gray-300 active:scale-[0.97] transition-all flex items-center justify-center gap-2"
             >
               <SkipIcon className="w-5 h-5" />
               PASS (→)
             </button>
             <button
               onClick={handleCorrect}
-              className="flex-1 py-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/20 active:scale-[0.97] transition-all flex items-center justify-center gap-2"
+              className="flex-1 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/20 active:scale-[0.97] transition-all flex items-center justify-center gap-2"
             >
               <CheckIcon className="w-5 h-5" />
               CORRECT (Space)
