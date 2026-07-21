@@ -27,13 +27,61 @@ interface WordResult {
   result: "correct" | "timeout" | "skip";
 }
 
+// Compound phrases to treat as single tokens
+const COMPOUND_PHRASES = ["La Union"];
+
+// Formats phrase to strict max 2 lines with min 3 letters per word constraint
+const getFormattedLines = (phrase: string): string[] => {
+  if (!phrase) return [];
+
+  let tempPhrase = phrase;
+  const matches: string[] = [];
+
+  // Protect compound phrases using placeholders
+  COMPOUND_PHRASES.forEach((cp, idx) => {
+    const regex = new RegExp(cp, "gi");
+    if (regex.test(tempPhrase)) {
+      tempPhrase = tempPhrase.replace(regex, `__CP${idx}__`);
+      matches[idx] = cp;
+    }
+  });
+
+  // Tokenize & filter out words with less than 3 letters
+  let tokens = tempPhrase
+    .trim()
+    .split(/\s+/)
+    .map((token) => {
+      if (token.startsWith("__CP") && token.endsWith("__")) {
+        const idx = parseInt(token.replace("__CP", "").replace("__", ""), 10);
+        return matches[idx];
+      }
+      return token;
+    })
+    .filter((token) => {
+      // Check letter count >= 3
+      const lettersOnly = token.replace(/[^a-zA-Z]/g, "");
+      return lettersOnly.length >= 3;
+    });
+
+  if (tokens.length === 0) return [];
+  if (tokens.length === 1) return [tokens[0]];
+
+  // Exactly 2 words -> 1 word per line
+  if (tokens.length === 2) {
+    return [tokens[0], tokens[1]];
+  }
+
+  // 3 or more words -> 1st word on Line 1, remaining words on Line 2
+  const line1 = tokens[0];
+  const line2 = tokens.slice(1).join(" ");
+
+  return [line1, line2];
+};
+
 export default function GameScreen({ words, timerSeconds, timerMode, onExit }: GameScreenProps) {
-  // We keep an active queue of words to play. Skipped words will be appended back to the end.
   const [activeWords, setActiveWords] = useState<WordState[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [phase, setPhase] = useState<GamePhase>("ready");
-  
-  // Track final word statuses indexed by original word order
   const [resultsMap, setResultsMap] = useState<Record<number, "correct" | "timeout" | "skip">>({});
   const [countdownNum, setCountdownNum] = useState(3);
   
@@ -41,7 +89,6 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const timerStartedRef = useRef(false);
 
-  // Initialize the word list queue on mount or restart
   useEffect(() => {
     setActiveWords(words.map((word, idx) => ({ originalIndex: idx, word })));
   }, [words]);
@@ -49,36 +96,13 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
   const currentWordObj = currentIndex < activeWords.length ? activeWords[currentIndex] : null;
   const currentWord = currentWordObj ? currentWordObj.word : "";
 
-  // Split multi-word strings into strictly 2 lines, filtering/merging words < 3 letters
-  const getTwoLines = (phrase: string): [string, string] => {
-    const rawWords = phrase.trim().split(/\s+/).filter(Boolean);
-    
-    // Filter out words under 3 letters unless it results in no words left
-    let validWords = rawWords.filter((w) => w.length >= 3);
-    if (validWords.length === 0) validWords = rawWords;
-
-    if (validWords.length === 1) {
-      return [validWords[0], ""];
-    }
-
-    // Distribute words as evenly as possible across exactly 2 lines
-    const mid = Math.ceil(validWords.length / 2);
-    const line1 = validWords.slice(0, mid).join(" ");
-    const line2 = validWords.slice(mid).join(" ");
-
-    return [line1, line2];
-  };
-
-  const [line1, line2] = getTwoLines(currentWord);
+  const formattedLines = getFormattedLines(currentWord);
 
   const handleTimeout = useCallback(() => {
     setPhase("timeout");
-    
-    // In continuous mode, the game ends when time runs out
     if (timerMode === "continuous") {
       setResultsMap((prev) => {
         const updated = { ...prev };
-        // Mark all remaining un-guessed words in the queue as timed out
         activeWords.slice(currentIndex).forEach((w) => {
           if (updated[w.originalIndex] !== "correct") {
             updated[w.originalIndex] = "timeout";
@@ -87,7 +111,6 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
         return updated;
       });
     } else {
-      // Per-word reset mode: just mark the current single word as timed out
       if (currentWordObj) {
         setResultsMap((prev) => ({
           ...prev,
@@ -102,10 +125,8 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     onTimeout: handleTimeout,
   });
 
-  // Calculate elapsed time spent guessing
   const timeSpentSeconds = timerSeconds - timer.secondsLeft;
 
-  // Wake lock
   useEffect(() => {
     const requestWakeLock = async () => {
       try {
@@ -118,12 +139,10 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     return () => { wakeLockRef.current?.release(); };
   }, []);
 
-  // Enter fullscreen on mount
   useEffect(() => {
     enterFullscreen();
   }, [enterFullscreen]);
 
-  // Ready countdown
   useEffect(() => {
     if (phase !== "ready") return;
     if (countdownNum < 0) {
@@ -137,8 +156,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     }
     const t = setTimeout(() => setCountdownNum((n) => n - 1), 800);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, countdownNum]);
+  }, [phase, countdownNum, timer, timerSeconds]);
 
   const advanceToNext = useCallback(() => {
     const nextIndex = currentIndex + 1;
@@ -159,7 +177,6 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
 
   const handleCorrect = useCallback(() => {
     if (phase !== "playing" || !currentWordObj) return;
-    
     setPhase("correct");
     setResultsMap((prev) => ({
       ...prev,
@@ -171,7 +188,6 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
   const handleSkip = useCallback(() => {
     if (phase !== "playing" || !currentWordObj) return;
 
-    // Record it as skipped for now
     setResultsMap((prev) => ({
       ...prev,
       [currentWordObj.originalIndex]: prev[currentWordObj.originalIndex] === "correct" 
@@ -180,13 +196,9 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     }));
 
     if (timerMode === "continuous") {
-      // Append the skipped word back to the end of the active queue to go over it again
       setActiveWords((prev) => [...prev, currentWordObj]);
-      
-      // Keep moving forward down the list. The skipped word will cycle back.
       setCurrentIndex((prev) => prev + 1);
     } else {
-      // In reset mode, skip moves directly to the next word
       const nextIndex = currentIndex + 1;
       if (nextIndex >= activeWords.length) {
         setPhase("finished");
@@ -217,7 +229,6 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     timer.reset(timerSeconds);
   };
 
-  // Keyboard controls listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (phase === "playing") {
@@ -249,13 +260,11 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [phase, handleCorrect, handleSkip, advanceToNext, handleExit, timerMode]);
 
-  // Transform internal results map to sequential display items
   const finalResults: WordResult[] = words.map((word, idx) => ({
     word,
     result: resultsMap[idx] || "skip",
   }));
 
-  // Timer visual
   const pct = timerSeconds > 0 ? timer.secondsLeft / timerSeconds : 0;
 
   const getBarColor = () => {
@@ -348,8 +357,6 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
             <h2 className="text-2xl font-bold text-white uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>
               GAME OVER
             </h2>
-            
-            {/* Display the spent guessing duration */}
             <div className="text-gray-400 text-xs font-mono tracking-wider">
               TIME SPENT: <span className="text-cyan-400 font-bold">{timeSpentDisplay.min}:{timeSpentDisplay.sec}</span> / {timeLimitDisplay.min}:{timeLimitDisplay.sec}
             </div>
@@ -434,22 +441,15 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
             <div>
               <p className="text-red-300/50 text-xs uppercase tracking-[0.25em] mb-3">The word was</p>
               <div className="flex flex-col items-center justify-center gap-1">
-                {line1 && (
+                {formattedLines.map((lineText, idx) => (
                   <p
+                    key={idx}
                     className="text-3xl sm:text-5xl font-black text-red-200 tracking-widest uppercase"
                     style={{ fontFamily: "'Orbitron', monospace" }}
                   >
-                    {line1}
+                    {lineText}
                   </p>
-                )}
-                {line2 && (
-                  <p
-                    className="text-3xl sm:text-5xl font-black text-red-200 tracking-widest uppercase"
-                    style={{ fontFamily: "'Orbitron', monospace" }}
-                  >
-                    {line2}
-                  </p>
-                )}
+                ))}
               </div>
             </div>
 
@@ -499,22 +499,15 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
             <div className="h-px w-32 mx-auto bg-gradient-to-r from-transparent via-emerald-500 to-transparent" />
 
             <div className="flex flex-col items-center justify-center gap-1">
-              {line1 && (
+              {formattedLines.map((lineText, idx) => (
                 <p
+                  key={idx}
                   className="text-3xl sm:text-5xl font-black text-emerald-200 tracking-widest uppercase"
                   style={{ fontFamily: "'Orbitron', monospace" }}
                 >
-                  {line1}
+                  {lineText}
                 </p>
-              )}
-              {line2 && (
-                <p
-                  className="text-3xl sm:text-5xl font-black text-emerald-200 tracking-widest uppercase"
-                  style={{ fontFamily: "'Orbitron', monospace" }}
-                >
-                  {line2}
-                </p>
-              )}
+              ))}
             </div>
 
             <button
@@ -555,33 +548,22 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
       {/* ── WORD AREA ── */}
       <div className="relative z-10 flex-[3] flex flex-col items-center justify-center px-4 sm:px-8 w-full min-h-[50vh] overflow-hidden">
         <div className="w-full h-full flex flex-col items-center justify-center min-h-0 gap-2">
-          {line1 && (
-            <div className="w-full flex-1 flex items-center justify-center min-h-0">
+          {formattedLines.map((lineText, idx) => (
+            <div key={idx} className="w-full flex-1 flex items-center justify-center min-h-0">
               <FitText
-                text={line1}
+                text={lineText}
                 className="text-white uppercase text-center tracking-normal whitespace-nowrap"
                 maxFontSize={800}
                 minFontSize={48}
               />
             </div>
-          )}
-          {line2 && (
-            <div className="w-full flex-1 flex items-center justify-center min-h-0">
-              <FitText
-                text={line2}
-                className="text-white uppercase text-center tracking-normal whitespace-nowrap"
-                maxFontSize={800}
-                minFontSize={48}
-              />
-            </div>
-          )}
+          ))}
         </div>
       </div>
 
       {/* ── TIMER SECTION ── */}
       {phase === "playing" && (
         <div className="relative z-10">
-          {/* Digital timer display */}
           <div className={`text-center pb-4 ${isUrgent ? "animate-pulse-fast" : ""}`}>
             <div className="inline-flex items-baseline gap-0.5" style={{ fontFamily: "'Orbitron', monospace" }}>
               <span className={`text-7xl sm:text-8xl md:text-9xl font-black tabular-nums ${getDigitColor()} transition-colors duration-500`}>
@@ -596,20 +578,17 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
             </div>
           </div>
 
-          {/* Timer bar */}
           <div className={`w-full h-3 sm:h-4 ${getBgBar()} relative overflow-hidden`}>
             <div
               className={`absolute inset-y-0 left-0 ${getBarColor()} ${getBarGlow()} transition-all duration-1000 ease-linear`}
               style={{ width: `${pct * 100}%` }}
             />
-            {/* Bright leading edge */}
             <div
               className="absolute inset-y-0 w-1 bg-white/60 transition-all duration-1000 ease-linear"
               style={{ left: `calc(${pct * 100}% - 2px)`, opacity: pct > 0.01 ? 1 : 0 }}
             />
           </div>
 
-          {/* Bottom controls */}
           <div className="px-4 py-4 flex gap-3 max-w-lg mx-auto">
             <button
               onClick={handleSkip}
