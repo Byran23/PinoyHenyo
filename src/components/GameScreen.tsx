@@ -27,7 +27,7 @@ interface WordResult {
   result: "correct" | "timeout" | "skip";
 }
 
-// Compound phrases to keep intact on a single line
+// Compound phrases to keep intact when possible
 const COMPOUND_PHRASES = [
   "Davao City",
   "La Union",
@@ -36,10 +36,12 @@ const COMPOUND_PHRASES = [
   "Cebu City",
 ];
 
+const MAX_CHAR_PER_LINE = 15;
+
 const getFormattedLines = (phrase: string): string[] => {
   if (!phrase) return [];
 
-  // METHOD 2: Respect explicit newlines if provided (e.g. "Davao City\nMindanao")
+  // METHOD 2: Respect explicit newlines if provided
   if (phrase.includes("\n")) {
     return phrase
       .split("\n")
@@ -47,11 +49,10 @@ const getFormattedLines = (phrase: string): string[] => {
       .filter(Boolean);
   }
 
-  // FALLBACK: Auto-format single-line phrases into max 2 lines
+  // Auto-format single-line phrases
   let tempPhrase = phrase;
   const matches: string[] = [];
 
-  // Sort compound phrases longest first so longer terms match first
   const sortedPhrases = [...COMPOUND_PHRASES].sort((a, b) => b.length - a.length);
 
   sortedPhrases.forEach((cp, idx) => {
@@ -62,7 +63,6 @@ const getFormattedLines = (phrase: string): string[] => {
     }
   });
 
-  // Tokenize & filter out short standalone words (< 3 letters) unless protected
   let tokens = tempPhrase
     .trim()
     .split(/\s+/)
@@ -80,17 +80,27 @@ const getFormattedLines = (phrase: string): string[] => {
     });
 
   if (tokens.length === 0) return [];
-  
-  // Single phrase or compound token -> 1 line
-  if (tokens.length === 1) return [tokens[0]];
 
-  // Exactly 2 tokens -> 1 token per line
-  if (tokens.length === 2) {
-    return [tokens[0], tokens[1]];
+  // Pack tokens into lines respecting MAX_CHAR_PER_LINE limit
+  const lines: string[] = [];
+  let currentLine = "";
+
+  tokens.forEach((token) => {
+    if (!currentLine) {
+      currentLine = token;
+    } else if ((currentLine + " " + token).length <= MAX_CHAR_PER_LINE) {
+      currentLine += " " + token;
+    } else {
+      lines.push(currentLine);
+      currentLine = token;
+    }
+  });
+
+  if (currentLine) {
+    lines.push(currentLine);
   }
 
-  // 3+ tokens -> 1st token on Line 1, remaining tokens on Line 2
-  return [tokens[0], tokens.slice(1).join(" ")];
+  return lines;
 };
 
 export default function GameScreen({ words, timerSeconds, timerMode, onExit }: GameScreenProps) {
