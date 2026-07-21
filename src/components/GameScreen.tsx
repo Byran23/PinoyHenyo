@@ -27,7 +27,7 @@ interface WordResult {
   result: "correct" | "timeout" | "skip";
 }
 
-// Compound phrases to keep intact on a single line when auto-splitting
+// Compound phrases to keep intact when possible
 const COMPOUND_PHRASES = [
   "Davao City",
   "La Union",
@@ -36,12 +36,12 @@ const COMPOUND_PHRASES = [
   "Cebu City",
 ];
 
-const TARGET_LINES = 3;
 const MAX_CHAR_PER_LINE = 15;
 
 const getFormattedLines = (phrase: string): string[] => {
   if (!phrase) return [];
 
+  // METHOD 2: Respect explicit newlines if provided
   if (phrase.includes("\n")) {
     return phrase
       .split("\n")
@@ -49,6 +49,7 @@ const getFormattedLines = (phrase: string): string[] => {
       .filter(Boolean);
   }
 
+  // Auto-format single-line phrases
   let tempPhrase = phrase;
   const matches: string[] = [];
 
@@ -80,31 +81,24 @@ const getFormattedLines = (phrase: string): string[] => {
 
   if (tokens.length === 0) return [];
 
+  // Pack tokens into lines respecting MAX_CHAR_PER_LINE limit
   const lines: string[] = [];
-  let currentLineTokens: string[] = [];
-  let currentLineLength = 0;
+  let currentLine = "";
 
-  tokens.forEach((token, index) => {
-    if (currentLineTokens.length === 0) {
-      currentLineTokens.push(token);
-      currentLineLength = token.length;
-    } else if ((currentLineLength + 1 + token.length) <= MAX_CHAR_PER_LINE) {
-      currentLineTokens.push(token);
-      currentLineLength += 1 + token.length;
+  tokens.forEach((token) => {
+    if (!currentLine) {
+      currentLine = token;
+    } else if ((currentLine + " " + token).length <= MAX_CHAR_PER_LINE) {
+      currentLine += " " + token;
     } else {
-      lines.push(currentLineTokens.join(" "));
-      currentLineTokens = [token];
-      currentLineLength = token.length;
-    }
-    
-    if (index === tokens.length - 1 || lines.length >= TARGET_LINES - 1) {
-      if (index < tokens.length - 1) {
-        currentLineTokens.push(...tokens.slice(index + 1));
-      }
-      lines.push(currentLineTokens.join(" "));
-      return; 
+      lines.push(currentLine);
+      currentLine = token;
     }
   });
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
 
   return lines;
 };
@@ -449,33 +443,33 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
       {/* TIMEOUT overlay */}
       {phase === "timeout" && (
         <div
-          className="absolute inset-0 z-30 flex flex-col items-center justify-center animate-fade-in py-8"
+          className="absolute inset-0 z-30 flex flex-col items-center justify-center animate-fade-in"
           style={{ background: "radial-gradient(ellipse at center, rgba(127,29,29,0.95) 0%, rgba(0,0,0,0.98) 100%)" }}
         >
-          <div className="space-y-6 text-center w-full px-6 max-w-2xl mx-auto flex flex-col items-center justify-center">
-            <div className="relative mx-auto w-16 h-16">
+          <div className="space-y-8 text-center w-full px-6 max-w-2xl mx-auto">
+            <div className="relative mx-auto w-20 h-20">
               <div className="absolute inset-0 rounded-full border-2 border-red-500/30" />
               <div className="absolute inset-0 rounded-full border-2 border-red-400 animate-ping opacity-30" />
               <div className="absolute inset-0 flex items-center justify-center">
-                <ClockIcon className="w-8 h-8 text-red-400" />
+                <ClockIcon className="w-10 h-10 text-red-400" />
               </div>
             </div>
 
             <h2
-              className="text-4xl sm:text-6xl md:text-7xl font-black text-white tracking-wider uppercase"
+              className="text-5xl sm:text-7xl md:text-8xl font-black text-white tracking-wider uppercase"
               style={{ fontFamily: "'Orbitron', monospace", textShadow: "0 0 40px rgba(239,68,68,0.4)" }}
             >
               TIME OUT
             </h2>
             <div className="h-px w-32 mx-auto bg-gradient-to-r from-transparent via-red-500 to-transparent" />
 
-            <div className="w-full space-y-3">
-              <p className="text-red-300/50 text-xs uppercase tracking-[0.25em]">The word was</p>
-              <div className="flex flex-col items-center justify-center gap-3">
+            <div>
+              <p className="text-red-300/50 text-xs uppercase tracking-[0.25em] mb-3">The word was</p>
+              <div className="flex flex-col items-center justify-center gap-1">
                 {formattedLines.map((lineText, idx) => (
                   <p
                     key={idx}
-                    className="text-2xl sm:text-4xl font-black text-red-200 tracking-widest uppercase leading-tight"
+                    className="text-3xl sm:text-5xl font-black text-red-200 tracking-widest uppercase"
                     style={{ fontFamily: "'Orbitron', monospace" }}
                   >
                     {lineText}
@@ -510,37 +504,35 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
       {/* CORRECT overlay */}
       {phase === "correct" && (
         <div
-          className="absolute inset-0 z-30 flex flex-col items-center justify-center animate-fade-in py-8"
+          className="absolute inset-0 z-30 flex flex-col items-center justify-center animate-fade-in"
           style={{ background: "radial-gradient(ellipse at center, rgba(6,78,59,0.95) 0%, rgba(0,0,0,0.98) 100%)" }}
         >
-          <div className="space-y-6 text-center w-full px-6 max-w-2xl mx-auto flex flex-col items-center justify-center">
-            <div className="relative mx-auto w-16 h-16">
+          <div className="space-y-8 text-center w-full px-6 max-w-2xl mx-auto">
+            <div className="relative mx-auto w-20 h-20">
               <div className="absolute inset-0 rounded-full border-2 border-emerald-500/30" />
               <div className="absolute inset-0 flex items-center justify-center">
-                <CheckIcon className="w-8 h-8 text-emerald-400" />
+                <CheckIcon className="w-10 h-10 text-emerald-400" />
               </div>
             </div>
 
             <h2
-              className="text-4xl sm:text-6xl md:text-7xl font-black text-white tracking-wider uppercase"
+              className="text-5xl sm:text-7xl md:text-8xl font-black text-white tracking-wider uppercase"
               style={{ fontFamily: "'Orbitron', monospace", textShadow: "0 0 40px rgba(16,185,129,0.4)" }}
             >
               CORRECT
             </h2>
             <div className="h-px w-32 mx-auto bg-gradient-to-r from-transparent via-emerald-500 to-transparent" />
 
-            <div className="w-full space-y-3">
-              <div className="flex flex-col items-center justify-center gap-3">
-                {formattedLines.map((lineText, idx) => (
-                  <p
-                    key={idx}
-                    className="text-2xl sm:text-4xl font-black text-emerald-200 tracking-widest uppercase leading-tight"
-                    style={{ fontFamily: "'Orbitron', monospace" }}
-                  >
-                    {lineText}
-                  </p>
-                ))}
-              </div>
+            <div className="flex flex-col items-center justify-center gap-1">
+              {formattedLines.map((lineText, idx) => (
+                <p
+                  key={idx}
+                  className="text-3xl sm:text-5xl font-black text-emerald-200 tracking-widest uppercase"
+                  style={{ fontFamily: "'Orbitron', monospace" }}
+                >
+                  {lineText}
+                </p>
+              ))}
             </div>
 
             <button
@@ -579,15 +571,15 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
       </div>
 
       {/* ── WORD AREA ── */}
-      <div className="relative z-10 flex-[3] flex flex-col items-center justify-center px-4 sm:px-12 w-full min-h-[50vh] py-6 overflow-hidden">
-        <div className="w-full max-w-7xl h-full flex flex-col items-center justify-center min-h-0 gap-6 sm:gap-8">
+      <div className="relative z-10 flex-[3] flex flex-col items-center justify-center px-4 sm:px-8 w-full min-h-[50vh] overflow-hidden">
+        <div className="w-full h-full flex flex-col items-center justify-center min-h-0 gap-2">
           {formattedLines.map((lineText, idx) => (
-            <div key={idx} className="w-full flex-1 flex items-center justify-center min-h-0 max-h-[22vh]">
+            <div key={idx} className="w-full flex-1 flex items-center justify-center min-h-0">
               <FitText
                 text={lineText}
-                className="text-white uppercase text-center tracking-tight whitespace-nowrap leading-none font-black"
-                maxFontSize={600}
-                minFontSize={36}
+                className="text-white uppercase text-center tracking-normal whitespace-nowrap"
+                maxFontSize={800}
+                minFontSize={48}
               />
             </div>
           ))}
@@ -597,7 +589,7 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
       {/* ── TIMER SECTION ── */}
       {phase === "playing" && (
         <div className="relative z-10">
-          <div className={`text-center pb-2 ${isUrgent ? "animate-pulse-fast" : ""}`}>
+          <div className={`text-center pb-4 ${isUrgent ? "animate-pulse-fast" : ""}`}>
             <div className="inline-flex items-baseline gap-0.5" style={{ fontFamily: "'Orbitron', monospace" }}>
               <span className={`text-7xl sm:text-8xl md:text-9xl font-black tabular-nums ${getDigitColor()} transition-colors duration-500`}>
                 {timerDisplay.min}
@@ -622,17 +614,17 @@ export default function GameScreen({ words, timerSeconds, timerMode, onExit }: G
             />
           </div>
 
-          <div className="px-4 py-3 flex gap-3 max-w-lg mx-auto">
+          <div className="px-4 py-4 flex gap-3 max-w-lg mx-auto">
             <button
               onClick={handleSkip}
-              className="flex-1 py-3 rounded-lg bg-white/[0.05] border border-white/[0.08] text-gray-400 font-semibold text-sm hover:bg-white/[0.1] hover:text-gray-300 active:scale-[0.97] transition-all flex items-center justify-center gap-2"
+              className="flex-1 py-4 rounded-lg bg-white/[0.05] border border-white/[0.08] text-gray-400 font-semibold text-sm hover:bg-white/[0.1] hover:text-gray-300 active:scale-[0.97] transition-all flex items-center justify-center gap-2"
             >
               <SkipIcon className="w-5 h-5" />
               PASS (→)
             </button>
             <button
               onClick={handleCorrect}
-              className="flex-1 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/20 active:scale-[0.97] transition-all flex items-center justify-center gap-2"
+              className="flex-1 py-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/20 active:scale-[0.97] transition-all flex items-center justify-center gap-2"
             >
               <CheckIcon className="w-5 h-5" />
               CORRECT (Space)
